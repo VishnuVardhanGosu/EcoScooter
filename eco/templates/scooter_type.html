@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Scooter Type - Eco Scooter Rental Service</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4CAF50;
+            --primary-dark: #388E3C;
+            --secondary: #03A9F4;
+            --dark: #263238;
+            --light: #ECEFF1;
+            --gray: #607D8B;
+            --success: #66BB6A;
+            --danger: #EF5350;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background-color: #f9f9f9;
+        }
+        
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        /* Header Styles */
+        header {
+            background-color: white;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 1rem 0;
+        }
+        
+        header .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            font-weight: 700;
+            color: var(--dark);
+            text-decoration: none;
+            font-size: 1.5rem;
+        }
+        
+        .logo i {
+            color: var(--primary);
+            margin-right: 0.5rem;
+            font-size: 1.8rem;
+        }
+        
+        nav ul {
+            display: flex;
+            list-style: none;
+            gap: 1.5rem;
+        }
+        
+        nav ul li a {
+            color: var(--dark);
+            text-decoration: none;
+            font-weight: 500;
+            position: relative;
+            padding: 0.5rem 0;
+            transition: var(--transition);
+        }
+        
+        nav ul li a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: var(--primary);
+            transition: var(--transition);
+        }
+        
+        nav ul li a:hover {
+            color: var(--primary);
+        }
+        
+        nav ul li a:hover::after {
+            width: 100%;
+        }
+        
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--dark);
+        }
+        
+        /* Page Title */
+        .page-title {
+            padding: 2rem 0;
+            text-align: center;
+        }
+        
+        .page-title h2 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+        
+        .page-title p {
+            font-size: 1.1rem;
+            color: var(--gray);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        /* Scooter Cards */
+        .scooter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0 4rem;
+        }
+        
+        .scooter-card {
+            background-color: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            position: relative;
+        }
+        
+        .scooter-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
+        }
+        
+        .scooter-image {
+            height: 200px;
+            background-color: #f5f7fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .scooter-icon {
+            font-size: 5rem;
+            color: var(--primary);
+        }
+        
+        .scooter-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background-color: var(--primary);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .scooter-details {
+            padding: 1.5rem;
+        }
+        
+        .scooter-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 0.8rem;
+            color: var(--dark);
+        }
+        
+        .scooter-desc {
+            color: var(--gray);
+            margin-bottom: 1.2rem;
+            font-size: 0.95rem;
+        }
+        
+        .scooter-features {
+            display: flex;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+        }
+        
+        .scooter-feature {
+            display: flex;
+            align-items: center;
+            font-size: 0.85rem;
+            color: var(--gray);
+            background-color: var(--light);
+            padding: 0.3rem 0.8rem;
+            border-radius: 50px;
+        }
+        
+        .scooter-feature i {
+            margin-right: 0.3rem;
+            font-size: 0.8rem;
+            color: var(--primary);
+        }
+        
+        .scooter-price {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .price-tag {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .price-period {
+            font-size: 0.9rem;
+            color: var(--gray);
+            font-weight: normal;
+        }
+        
+        .select-btn {
+            display: block;
+            width: 100%;
+            padding: 0.8rem;
+            background-color: var(--primary);
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: var(--transition);
+            font-family: 'Poppins', sans-serif;
+        }
+        
+        .select-btn:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-3px);
+        }
+        
+        /* Flash messages */
+        .flash-messages {
+            padding: 1rem 0;
+        }
+        
+        .flash-message {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+        }
+        
+        .flash-message i {
+            margin-right: 0.8rem;
+            font-size: 1.2rem;
+        }
+        
+        .flash-success {
+            background-color: #E8F5E9;
+            color: #2E7D32;
+            border-left: 4px solid var(--success);
+        }
+        
+        .flash-danger {
+            background-color: #FFEBEE;
+            color: #C62828;
+            border-left: 4px solid var(--danger);
+        }
+        
+        /* Footer */
+        footer {
+            background-color: var(--dark);
+            color: white;
+            padding: 4rem 0 2rem;
+        }
+        
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .footer-column h3 {
+            font-size: 1.2rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+            padding-bottom: 0.5rem;
+        }
+        
+        .footer-column h3::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            height: 2px;
+            width: 50px;
+            background-color: var(--primary);
+        }
+        
+        .footer-column ul {
+            list-style: none;
+        }
+        
+        .footer-column ul li {
+            margin-bottom: 0.8rem;
+        }
+        
+        .footer-column ul li a {
+            color: #B0BEC5;
+            text-decoration: none;
+            transition: var(--transition);
+        }
+        
+        .footer-column ul li a:hover {
+            color: var(--primary);
+            padding-left: 5px;
+        }
+        
+        .footer-bottom {
+            text-align: center;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Responsive */
+        @media (max-width: 992px) {
+            .scooter-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: block;
+            }
+            
+            nav {
+                position: fixed;
+                top: 0;
+                right: -100%;
+                height: 100vh;
+                width: 70%;
+                background-color: white;
+                box-shadow: var(--shadow);
+                padding: 2rem;
+                transition: var(--transition);
+            }
+            
+            nav.active {
+                right: 0;
+            }
+            
+            nav ul {
+                flex-direction: column;
+                margin-top: 3rem;
+            }
+            
+            nav ul li {
+                margin-bottom: 1.5rem;
+            }
+            
+            .scooter-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <a href="{{ url_for('home') }}" class="logo">
+                <i class="fas fa-bolt"></i> Eco Scooter
+            </a>
+            <button class="mobile-menu-btn">
+                <i class="fas fa-bars"></i>
+            </button>
+            <nav>
+                <ul>
+                    <li><a href="{{ url_for('home') }}">Home</a></li>
+                    {% if session.get('user_id') %}
+                        <li><a href="{{ url_for('scooter_type') }}">Book Now</a></li>
+                        <li><a href="{{ url_for('my_bookings') }}">My Bookings</a></li>
+                        <li><a href="{{ url_for('logout') }}">Logout ({{ session.get('username', 'User') }})</a></li>
+                    {% else %}
+                        <li><a href="{{ url_for('login') }}">Login</a></li>
+                        <li><a href="{{ url_for('register') }}">Register</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">
+                            <i class="fas fa-{% if category == 'success' %}check-circle{% else %}exclamation-circle{% endif %}"></i>
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="page-title">
+            <h2>Choose Your Perfect Ride</h2>
+            <p>Select from our range of eco-friendly transportation options for your next adventure</p>
+        </div>
+        
+        <div class="scooter-grid">
+            {% for scooter_type, details in scooter_types.items() %}
+            <div class="scooter-card">
+                <div class="scooter-image">
+                    <i class="fas fa-{{ details.icon }} scooter-icon"></i>
+                    {% if details.badge %}
+                    <span class="scooter-badge">{{ details.badge }}</span>
+                    {% endif %}
+                </div>
+                <div class="scooter-details">
+                    <h3 class="scooter-title">{{ details.title }}</h3>
+                    <p class="scooter-desc">{{ details.description }}</p>
+                    <div class="scooter-features">
+                        {% for feature in details.features %}
+                        <span class="scooter-feature"><i class="fas fa-{{ feature.icon }}"></i> {{ feature.text }}</span>
+                        {% endfor %}
+                    </div>
+                    <div class="scooter-price">
+                        <div class="price-tag">₹{{ details.price }} <span class="price-period">/day</span></div>
+                    </div>
+                    <form action="{{ url_for('scooter_type') }}" method="post">
+                        <input type="hidden" name="scooter_type" value="{{ scooter_type }}">
+                        <button type="submit" class="select-btn">Select This {{ details.title }}</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-column">
+                    <h3>Eco Scooter</h3>
+                    <p>Providing sustainable mobility solutions for modern city explorers. Join the green revolution on two wheels.</p>
+                </div>
+                <div class="footer-column">
+                    <h3>Quick Links</h3>
+                    <ul>
+                        <li><a href="{{ url_for('home') }}">Home</a></li>
+                        <li><a href="{{ url_for('scooter_type') }}">Book a Scooter</a></li>
+                        <li><a href="{{ url_for('my_bookings') }}">My Bookings</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h3>Contact Us</h3>
+                    <ul>
+                        <li><i class="fas fa-map-marker-alt"></i> 123 Green Street, Eco City</li>
+                        <li><i class="fas fa-phone"></i> +1 234 567 8900</li>
+                        <li><i class="fas fa-envelope"></i> info@ecoscooter.com</li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h3>Follow Us</h3>
+                    <div class="social-icons">
+                        <a href="#"><i class="fab fa-facebook"></i></a>
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; {{ now.year }} Eco Scooter Rental Service. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        document.querySelector('.mobile-menu-btn').addEventListener('click', () => {
+            document.querySelector('nav').classList.toggle('active');
+        });
+    </script>
+</body>
+</html>
