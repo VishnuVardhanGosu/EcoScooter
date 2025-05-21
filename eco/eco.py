@@ -1,14 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from datetime import datetime
 import uuid
-import sqlite3
 import os
+import boto3
+from boto3.dynamodb.conditions import Key, Attr
+from decimal import Decimal
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(24))
 
-# Database setup
-DATABASE_PATH = 'eco_scooter_rental.db'
+# AWS Credentials
+AWS_ACCESS_KEY = ''
+AWS_SECRET_KEY = ''
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
 # Global constant for scooter type prices per day
 PRICE_PER_DAY = {
@@ -57,56 +61,197 @@ SCOOTER_TYPES = {
     }
 }
 
-def init_db():
-    """Initialize database if it doesn't exist"""
-    # Check if database file exists
-    if not os.path.exists(DATABASE_PATH):
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        # Create Users table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            mobile_number TEXT,
-            created_at TEXT
-        )
-        ''')
-        
-        # Create Bookings table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS bookings (
-            booking_id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            scooter_type TEXT NOT NULL,
-            num_days INTEGER NOT NULL,
-            pickup TEXT NOT NULL,
-            dropoff TEXT NOT NULL,
-            helmet_needed TEXT,
-            special_requests TEXT,
-            payment_mode TEXT NOT NULL,
-            total_price REAL NOT NULL,
-            status TEXT NOT NULL,
-            created_at TEXT,
-            cancelled_at TEXT,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-        ''')
-        
-        conn.commit()
-        conn.close()
+# AWS Services Setup with explicit credentials
+def get_dynamodb_resource():
+    return boto3.resource(
+        'dynamodb',
+        region_name=AWS_REGION,
+        aws_access_key_id=AWS_ACCESS_KEY,
+        aws_secret_access_key=AWS_SECRET_KEY
+    )
 
-def get_db_connection():
-    """Create a connection to the SQLite database"""
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row  # This enables column access by name
-    return conn
+def get_sns_client():
+    return boto3.client(
+        'sns',
+        region_name=AWS_REGION,
+        aws_access_key_id=AWS_ACCESS_KEY,
+        aws_secret_access_key=AWS_SECRET_KEY
+    )
+
+def init_db():
+    """Initialize DynamoDB tables if they don't exist"""
+    # Check if AWS credentials are available
+    if not AWS_ACCESS_KEY or not AWS_SECRET_KEY:
+        print("Warning: AWS credentials not found in environment variables.")
+        print("Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.")
+        return
+    
+    dynamodb = get_dynamodb_resource()
+    existing_tables = [table.name for table in dynamodb.tables.all()]
+    
+    if 'EcoUsers' not in existing_tables:
+        users_table = dynamodb.create_table(
+            TableName='EcoUsers',
+            KeySchema=[
+                {
+                    'AttributeName': 'id',
+                    'KeyType': 'HASH'  # Partition key
+                }
+            ],
+            AttributeDefinitions=[
+                {
+                    'AttributeName': 'id',
+                    'AttributeType': 'S'
+                },
+                {
+                    'AttributeName': 'email',
+                    'AttributeType': 'S'
+                }
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    'IndexName': 'EmailIndex',
+                    'KeySchema': [
+                        {
+                            'AttributeName': 'email',
+                            'KeyType': 'HASH'
+                        }
+                    ],
+                    'Projection': {
+                        'ProjectionType': 'ALL'
+                    },
+                    'ProvisionedThroughput': {
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
+                }
+            ],
+            ProvisionedThroughput={
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        )
+        # Wait for the table to be created
+        users_table.meta.client.get_waiter('table_exists').wait(TableName='EcoUsers')
+    
+    if 'EcoBookings' not in existing_tables:
+        bookings_table = dynamodb.create_table(
+            TableName='EcoBookings',
+            KeySchema=[
+                {
+                    'AttributeName': 'booking_id',
+                    'KeyType': 'HASH'  # Partition key
+                }
+            ],
+            AttributeDefinitions=[
+                {
+                    'AttributeName': 'booking_id',
+                    'AttributeType': 'S'
+                },
+                {
+                    'AttributeName': 'user_id',
+                    'AttributeType': 'S'
+                }
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    'IndexName': 'UserIdIndex',
+                    'KeySchema': [
+                        {
+                            'AttributeName': 'user_id',
+                            'KeyType': 'HASH'
+                        }
+                    ],
+                    'Projection': {
+                        'ProjectionType': 'ALL'
+                    },
+                    'ProvisionedThroughput': {
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
+                }
+            ],
+            ProvisionedThroughput={
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        )
+        # Wait for the table to be created
+        bookings_table.meta.client.get_waiter('table_exists').wait(TableName='EcoBookings')
+
+# Helper functions for AWS
+def get_user_by_email(email):
+    dynamodb = get_dynamodb_resource()
+    users_table = dynamodb.Table('EcoUsers')
+    
+    response = users_table.query(
+        IndexName='EmailIndex',
+        KeyConditionExpression=Key('email').eq(email)
+    )
+    
+    if response['Items'] and len(response['Items']) > 0:
+        return response['Items'][0]
+    return None
+
+def get_user(user_id):
+    dynamodb = get_dynamodb_resource()
+    users_table = dynamodb.Table('EcoUsers')
+    
+    response = users_table.get_item(
+        Key={
+            'id': user_id
+        }
+    )
+    
+    if 'Item' in response:
+        return response['Item']
+    return None
+
+def get_user_bookings(user_id):
+    dynamodb = get_dynamodb_resource()
+    bookings_table = dynamodb.Table('EcoBookings')
+    
+    response = bookings_table.query(
+        IndexName='UserIdIndex',
+        KeyConditionExpression=Key('user_id').eq(user_id)
+    )
+    
+    return sorted(response['Items'], key=lambda x: x['created_at'], reverse=True)
+
+def create_sns_topic(topic_name):
+    """Create SNS topic if it doesn't exist and return its ARN"""
+    sns_client = get_sns_client()
+    
+    # Check if topic already exists
+    topics = sns_client.list_topics()
+    for topic in topics.get('Topics', []):
+        if topic_name in topic['TopicArn']:
+            return topic['TopicArn']
+    
+    # Create new topic
+    response = sns_client.create_topic(Name=topic_name)
+    return response['TopicArn']
+
+def send_notification(topic_arn, message, subject):
+    """Send SNS notification"""
+    sns_client = get_sns_client()
+    
+    try:
+        response = sns_client.publish(
+            TopicArn=topic_arn,
+            Message=message,
+            Subject=subject
+        )
+        return True
+    except Exception as e:
+        print(f"SNS notification error: {str(e)}")
+        return False
 
 # Initialize database when app starts
 init_db()
+
+# Create SNS topic for booking notifications
+BOOKING_TOPIC_ARN = create_sns_topic('EcoScooterBookings')
 
 # Home Route
 @app.route('/')
@@ -123,26 +268,27 @@ def register():
         mobile_number = request.form['mobile_number']
         
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
             # Check if user already exists
-            cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
-            user = cursor.fetchone()
-            
-            if user:
+            if get_user_by_email(email):
                 flash("Email already registered. Please login.", "danger")
-                conn.close()
                 return redirect(url_for('login'))
             
             # Create new user
             user_id = str(uuid.uuid4())
-            cursor.execute(
-                "INSERT INTO users (id, name, email, password, mobile_number, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (user_id, name, email, password, mobile_number, datetime.now().isoformat())
+            
+            dynamodb = get_dynamodb_resource()
+            users_table = dynamodb.Table('EcoUsers')
+            
+            users_table.put_item(
+                Item={
+                    'id': user_id,
+                    'name': name,
+                    'email': email,
+                    'password': password,  # In production, use password hashing
+                    'mobile_number': mobile_number,
+                    'created_at': datetime.now().isoformat()
+                }
             )
-            conn.commit()
-            conn.close()
             
             flash("Thanks for registering!", "success")
             return redirect(url_for('login'))
@@ -159,22 +305,16 @@ def login():
         password = request.form['password']
         
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            # Get user by email
+            user = get_user_by_email(email)
             
-            # Query for user with email and password
-            cursor.execute("SELECT * FROM users WHERE email = ? AND password = ?", (email, password))
-            user = cursor.fetchone()
-            
-            if user:
+            if user and user['password'] == password:  # In production, use password verification
                 session['user_id'] = user['id']
                 session['username'] = user['name']
                 flash("Login successful!", "success")
-                conn.close()
                 return redirect(url_for('scooter_type'))
             else:
                 flash("Invalid login. Please try again.", "danger")
-                conn.close()
         except Exception as e:
             flash(f"Error: {str(e)}", "danger")
     
@@ -240,32 +380,55 @@ def book(scooter_type):
             # Create unique booking ID
             booking_id = str(uuid.uuid4())
             
-            # Insert booking into SQLite
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                """INSERT INTO bookings 
-                (booking_id, user_id, scooter_type, num_days, pickup, dropoff, helmet_needed, special_requests, 
-                payment_mode, total_price, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    booking_id, user_id, scooter_type, num_days, check_in, check_out, 
-                    helmet_needed, special_requests, payment_mode, total_price, 'confirmed', 
-                    datetime.now().isoformat()
-                )
-            )
-            conn.commit()
+            # Get user details for the booking
+            user = get_user(user_id)
             
-            # Get user details for confirmation message
-            cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-            user = cursor.fetchone()
+            # Insert booking into DynamoDB
+            dynamodb = get_dynamodb_resource()
+            bookings_table = dynamodb.Table('EcoBookings')
             
+            booking_item = {
+                'booking_id': booking_id,
+                'user_id': user_id,
+                'scooter_type': scooter_type,
+                'num_days': num_days,
+                'pickup': check_in,
+                'dropoff': check_out,
+                'helmet_needed': helmet_needed,
+                'special_requests': special_requests,
+                'payment_mode': payment_mode,
+                'total_price': Decimal(str(total_price)),
+                'status': 'confirmed',
+                'created_at': datetime.now().isoformat()
+            }
+            
+            bookings_table.put_item(Item=booking_item)
+            
+            # Send SNS notification for booking confirmation
             if user:
-                # Here you would implement any notification logic
-                # In a real app, you might use an email service or SMS gateway
-                print(f"Booking Confirmation for {user['name']}: {scooter_type} for {num_days} days")
+                notification_message = f"""
+                Booking Confirmation
+                ------------------------
+                Name: {user['name']}
+                Email: {user['email']}
+                Mobile: {user['mobile_number']}
+                
+                Booking Details:
+                - Scooter Type: {scooter_type.capitalize()}
+                - Duration: {num_days} days
+                - Pickup: {check_in}
+                - Dropoff: {check_out}
+                - Total Price: ₹{total_price}
+                
+                Thank you for choosing EcoScooter!
+                """
+                
+                send_notification(
+                    BOOKING_TOPIC_ARN, 
+                    notification_message, 
+                    f"New Booking: {scooter_type.capitalize()} scooter for {user['name']}"
+                )
             
-            conn.close()
             return redirect(url_for('thank_you'))
 
         except Exception as e:
@@ -286,21 +449,13 @@ def my_bookings():
         return redirect(url_for('login'))
 
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        bookings = get_user_bookings(user_id)
         
-        # Query all bookings for the user from SQLite
-        cursor.execute("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
-        bookings = cursor.fetchall()
-        
-        # Convert to list of dictionaries for template compatibility
-        bookings_list = []
+        # Convert Decimal values to float for template rendering
         for booking in bookings:
-            booking_dict = dict(booking)
-            bookings_list.append(booking_dict)
+            booking['total_price'] = float(booking['total_price'])
         
-        conn.close()
-        return render_template('my_bookings.html', bookings=bookings_list)
+        return render_template('my_bookings.html', bookings=bookings)
     except Exception as e:
         flash(f"Error retrieving bookings: {str(e)}", "danger")
         return render_template('my_bookings.html', bookings=[])
@@ -314,25 +469,62 @@ def cancel_booking(booking_id):
         return redirect(url_for('login'))
     
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        dynamodb = get_dynamodb_resource()
+        bookings_table = dynamodb.Table('EcoBookings')
         
         # Get the booking to verify it belongs to the user
-        cursor.execute("SELECT * FROM bookings WHERE booking_id = ?", (booking_id,))
-        booking = cursor.fetchone()
+        response = bookings_table.get_item(
+            Key={
+                'booking_id': booking_id
+            }
+        )
         
-        if not booking or booking['user_id'] != user_id:
+        if 'Item' not in response or response['Item']['user_id'] != user_id:
             flash("Unauthorized or booking not found.", "danger")
-            conn.close()
             return redirect(url_for('my_bookings'))
         
+        booking = response['Item']
+        
         # Update the booking status to cancelled
-        cursor.execute(
-            "UPDATE bookings SET status = ?, cancelled_at = ? WHERE booking_id = ?",
-            ('cancelled', datetime.now().isoformat(), booking_id)
+        bookings_table.update_item(
+            Key={
+                'booking_id': booking_id
+            },
+            UpdateExpression='SET #status = :status, cancelled_at = :cancelled_at',
+            ExpressionAttributeNames={
+                '#status': 'status'  # 'status' is a reserved word in DynamoDB
+            },
+            ExpressionAttributeValues={
+                ':status': 'cancelled',
+                ':cancelled_at': datetime.now().isoformat()
+            }
         )
-        conn.commit()
-        conn.close()
+        
+        # Get user details for the notification
+        user = get_user(user_id)
+        if user:
+            # Send SNS notification for booking cancellation
+            notification_message = f"""
+            Booking Cancellation
+            ------------------------
+            Name: {user['name']}
+            Email: {user['email']}
+            Mobile: {user['mobile_number']}
+            
+            Cancelled Booking Details:
+            - Booking ID: {booking_id}
+            - Scooter Type: {booking['scooter_type'].capitalize()}
+            - Pickup Date: {booking['pickup']}
+            - Cancellation Time: {datetime.now().isoformat()}
+            
+            This booking has been cancelled.
+            """
+            
+            send_notification(
+                BOOKING_TOPIC_ARN,
+                notification_message,
+                f"Booking Cancellation: {booking['scooter_type'].capitalize()} by {user['name']}"
+            )
         
         flash("Booking cancelled successfully.", "success")
     except Exception as e:
@@ -347,5 +539,27 @@ def logout():
     flash("You have been logged out.", "success")
     return redirect(url_for('home'))
 
+# Add a route to subscribe to SNS notifications
+@app.route('/subscribe', methods=['GET', 'POST'])
+def subscribe():
+    if request.method == 'POST':
+        email = request.form['email']
+        
+        try:
+            # Subscribe the email to the SNS topic
+            sns_client = get_sns_client()
+            response = sns_client.subscribe(
+                TopicArn=BOOKING_TOPIC_ARN,
+                Protocol='email',
+                Endpoint=email
+            )
+            
+            flash("Subscription request sent! Please check your email to confirm.", "success")
+            return redirect(url_for('home'))
+        except Exception as e:
+            flash(f"Error: {str(e)}", "danger")
+    
+    return render_template('subscribe.html')
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
