@@ -9,6 +9,11 @@ from decimal import Decimal
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(24))
 
+# AWS Credentials
+AWS_ACCESS_KEY = ''
+AWS_SECRET_KEY = ''
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+
 # Global constant for scooter type prices per day
 PRICE_PER_DAY = {
     'electric': 500,
@@ -56,15 +61,31 @@ SCOOTER_TYPES = {
     }
 }
 
-# AWS Services Setup
+# AWS Services Setup with explicit credentials
 def get_dynamodb_resource():
-    return boto3.resource('dynamodb', region_name='us-east-1')
+    return boto3.resource(
+        'dynamodb',
+        region_name=AWS_REGION,
+        aws_access_key_id=AWS_ACCESS_KEY,
+        aws_secret_access_key=AWS_SECRET_KEY
+    )
 
 def get_sns_client():
-    return boto3.client('sns', region_name='us-east-1')
+    return boto3.client(
+        'sns',
+        region_name=AWS_REGION,
+        aws_access_key_id=AWS_ACCESS_KEY,
+        aws_secret_access_key=AWS_SECRET_KEY
+    )
 
 def init_db():
     """Initialize DynamoDB tables if they don't exist"""
+    # Check if AWS credentials are available
+    if not AWS_ACCESS_KEY or not AWS_SECRET_KEY:
+        print("Warning: AWS credentials not found in environment variables.")
+        print("Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.")
+        return
+    
     dynamodb = get_dynamodb_resource()
     existing_tables = [table.name for table in dynamodb.tables.all()]
     
