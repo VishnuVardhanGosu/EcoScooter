@@ -58,10 +58,10 @@ SCOOTER_TYPES = {
 
 # AWS Services Setup
 def get_dynamodb_resource():
-    return boto3.resource('dynamodb', region_name='ap-south-1')
+    return boto3.resource('dynamodb', region_name='us-east-1')
 
 def get_sns_client():
-    return boto3.client('sns', region_name='ap-south-1')
+    return boto3.client('sns', region_name='us-east-1')
 
 def init_db():
     """Initialize DynamoDB tables if they don't exist"""
